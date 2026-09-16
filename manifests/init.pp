@@ -1,14 +1,68 @@
 # docker_maths/manifests/init.pp
 class docker_maths (
-  Array[String] $docker_users  = [],
-  Boolean       $enable_nvidia = false,
+  Array[String]   $docker_users     = [],
+  Boolean         $enable_nvidia    = false,
+  Optional[String] $data_root       = undef,
+  Optional[String] $containerd_root = undef,
 ) {
+  ensure_packages(['jq'])
+
+  if $data_root {
+    file { '/etc/docker/daemon.json':
+      ensure  => file,
+      content => '{}',
+      replace => false,   # only creates if absent — never clobbers nvidia-ctk's later edits
+      before  => Class['docker'],
+    }
+
+    exec { 'docker_data_root':
+      command => "/bin/sh -c 'jq \". + {\\\"data-root\\\": \\\"${data_root}\\\"}\" /etc/docker/daemon.json > /etc/docker/daemon.json.tmp && mv /etc/docker/daemon.json.tmp /etc/docker/daemon.json'",
+      unless  => "/usr/bin/jq -e '.\"data-root\" == \"${data_root}\"' /etc/docker/daemon.json",
+      require => File['/etc/docker/daemon.json'],
+      before  => Class['docker'],
+      notify  => Service['docker'],
+    }
+  }
+
+  if $containerd_root {
+    file_line { 'containerd_root':
+      path  => '/etc/containerd/config.toml',
+      line  => "root = \"${containerd_root}\"",
+      match => '^#?root\s*=',
+      require => Class['docker'],
+    }
+
+    service { 'containerd':
+      ensure    => running,
+      enable    => true,
+      subscribe => File_line['containerd_root'],
+    }
+  }
+
   class { 'docker':
     docker_users                => $docker_users,
     use_upstream_package_source => false,
     docker_ce_package_name      => 'docker.io',
   }
   contain 'docker'
+
+  # Daily cleanup, matching the manual routine already in use — prevents
+  # unbounded growth from stopped containers and unused images even once
+  # storage is redirected off the small root filesystem.
+  file { '/etc/cron.daily/docker-clean':
+    ensure  => file,
+    mode    => '0755',
+    content => @(SCRIPT)
+      #!/bin/sh
+      docker container prune -f > /dev/null 2>/tmp/docker-cleanup.err
+      docker image prune -a -f > /dev/null 2>>/tmp/docker-cleanup.err
+
+      if [ -s /tmp/docker-cleanup.err ]; then
+          cat /tmp/docker-cleanup.err
+      fi
+      | SCRIPT
+    require => Class['docker'],
+  }
 
   if $enable_nvidia {
     # ensure_packages, not a plain package declaration: github_actions_runner_maths
