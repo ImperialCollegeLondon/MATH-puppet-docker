@@ -31,17 +31,22 @@ class docker_maths (
   }
 
   if $containerd_root {
-    file_line { 'containerd_root':
-      path  => '/etc/containerd/config.toml',
-      line  => "root = \"${containerd_root}\"",
-      match => '^#?root\s*=',
-      require => Class['docker'],
+    file { '/etc/containerd':
+      ensure => directory,
+      before => Class['docker'],
+    }
+
+    file { '/etc/containerd/config.toml':
+      ensure  => file,
+      content => "version = 2\nroot = \"${containerd_root}\"\n",
+      require => File['/etc/containerd'],
+      before  => Class['docker'],
     }
 
     service { 'containerd':
       ensure    => running,
       enable    => true,
-      subscribe => File_line['containerd_root'],
+      subscribe => File['/etc/containerd/config.toml'],
     }
   }
 
