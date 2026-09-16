@@ -8,10 +8,16 @@ class docker_maths (
   ensure_packages(['jq'])
 
   if $data_root {
+    file { '/etc/docker':
+      ensure => directory,
+      before => Class['docker'],
+    }
+
     file { '/etc/docker/daemon.json':
       ensure  => file,
       content => '{}',
-      replace => false,   # only creates if absent — never clobbers nvidia-ctk's later edits
+      replace => false,
+      require => File['/etc/docker'],
       before  => Class['docker'],
     }
 
