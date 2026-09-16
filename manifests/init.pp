@@ -5,6 +5,8 @@ class docker_maths (
 ) {
   class { 'docker':
     docker_users => $docker_users,
+    use_upstream_package_source => false,
+    package_name                => 'docker.io',
   }
   contain 'docker'
 
