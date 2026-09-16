@@ -4,9 +4,9 @@ class docker_maths (
   Boolean       $enable_nvidia = false,
 ) {
   class { 'docker':
-    docker_users => $docker_users,
+    docker_users                => $docker_users,
     use_upstream_package_source => false,
-    package_name                => 'docker.io',
+    docker_ce_package_name      => 'docker.io',
   }
   contain 'docker'
 
