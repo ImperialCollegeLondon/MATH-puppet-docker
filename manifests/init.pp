@@ -52,6 +52,7 @@ class docker_maths (
   file { '/etc/cron.daily/docker-clean':
     ensure  => file,
     mode    => '0755',
+    require => Class['docker'],
     content => @(SCRIPT)
       #!/bin/sh
       docker container prune -f > /dev/null 2>/tmp/docker-cleanup.err
@@ -61,7 +62,6 @@ class docker_maths (
           cat /tmp/docker-cleanup.err
       fi
       | SCRIPT
-    require => Class['docker'],
   }
 
   if $enable_nvidia {
